@@ -126,10 +126,7 @@ public sealed class ResidentHost
             NamedPipeServerStream? server = null;
             try
             {
-                server = new NamedPipeServerStream(
-                    PipeProtocol.PipeName, PipeDirection.InOut,
-                    NamedPipeServerStream.MaxAllowedServerInstances,
-                    PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+                server = PipeProtocol.CreateServerStream();
 
                 await server.WaitForConnectionAsync(ct);
                 var accepted = server;

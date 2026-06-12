@@ -1,3 +1,5 @@
+using System.IO.Pipes;
+using System.Security.AccessControl;
 using System.Security.Principal;
 
 namespace ZenLock.Pipe;
@@ -15,6 +17,28 @@ public static class PipeProtocol
             catch { sid = "default"; }
             return $"ZenLock_{sid}";
         }
+    }
+
+    /// <summary>
+    /// Resident'ın (elevated/high IL) sunucu pipe'ını açık DACL ile oluşturur.
+    /// Aksi halde elevated süreçin varsayılan güvenlik tanımı, normal IL'deki gate'in
+    /// (aynı kullanıcı) bağlanmasını engelliyor — §2 #4. AuthenticatedUsers'a ReadWrite +
+    /// CreateNewInstance (sunucunun ek örnek açabilmesi için) verilir.
+    /// </summary>
+    public static NamedPipeServerStream CreateServerStream()
+    {
+        var security = new PipeSecurity();
+        security.AddAccessRule(new PipeAccessRule(
+            new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null),
+            PipeAccessRights.ReadWrite | PipeAccessRights.CreateNewInstance,
+            AccessControlType.Allow));
+
+        return NamedPipeServerStreamAcl.Create(
+            PipeName, PipeDirection.InOut,
+            NamedPipeServerStream.MaxAllowedServerInstances,
+            PipeTransmissionMode.Byte, PipeOptions.Asynchronous,
+            inBufferSize: 0, outBufferSize: 0,
+            pipeSecurity: security);
     }
 }
 

@@ -36,9 +36,10 @@ yetkili saldırgan, disk üzerindeki veri gizliliği (o BitLocker'ın işi).
    çağırır. `Program.Main` `argv[0]`'ı hedef yol, `argv[1..]`'i argümanlar varsayar.
    **Varsayılan tarayıcı senaryosu** (link tıklama → `zen.exe <url>`) ve dosya
    ilişkilendirmeleri TEST EDİLMELİ — arg yönlendirme/tırnak doğru çalışıyor mu?
-4. **Pipe ACL.** Elevated (high IL) resident'ın pipe'ına, normal IL gate bağlanır.
-   Aynı kullanıcı olduğu için varsayılan DACL yeterli olmalı; sorun çıkarsa açık
-   `PipeSecurity` (AuthenticatedUserSid, ReadWrite) eklenecek. Şu an EKLENMEDİ.
+4. **Pipe ACL → ÇÖZÜLDÜ (2026-06-12).** Elevated resident'ın varsayılan DACL'i, normal
+   IL gate'in bağlanmasını engelliyordu ("kilit servisi çalışmıyor" uyarısı şifre girişinden
+   sonra). Çözüm: `PipeProtocol.CreateServerStream()` artık açık `PipeSecurity` ile pipe
+   açıyor (AuthenticatedUsers → ReadWrite + CreateNewInstance). Resident bu fabrikayı kullanır.
 5. **Self-protection yok.** Yönetici görevi durdurup anahtarı silebilir. Tasarım gereği
    kapsam dışı. Gold-plating yapma.
 
