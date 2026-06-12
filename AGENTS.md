@@ -139,16 +139,20 @@ schtasks /Delete /TN "ZenLock" /F
 - [ ] Resident'a ulaşılamıyorsa gate uygulamayı AÇMAZ (fail-safe) — sadece uyarır.
 - [ ] HKLM yazan tüm yollar yalnızca resident (elevated) süreçten çağrılır.
 - [ ] WinForms tipleri yalnızca `WinForms.*` alias'ı ile kullanılır (Application/MessageBox belirsizliği).
-- [ ] Auto-relock güvenlik ağı (`ForceClose`) korunur; gate çökmesinde geçit açık kalmaz.
+- [ ] Auto-relock güvenlik ağı (`ForceClose`) `nopassword` yolunda korunur; gate çökmesinde
+      geçit açık kalmaz. (İstisna: "oturumda bir kez" muaf exe'lerinde geçit kasıtlı açık
+      bırakılır — §9.1. Bu bir bug değildir.)
 
-## 9. Açık sorular (kod yazmadan önce kullanıcıya sor)
+## 9. Açık sorular — KARARA BAĞLANDI (2026-06-12)
 
-1. Varsayılan tarayıcı senaryosunda her link tıklamasında şifre sormak isteniyor mu, yoksa
-   "oturum boyunca bir kez doğrula" gibi bir muafiyet mi gerekir?
-2. Mikro yarış penceresini kapatmak için ek karmaşıklık (ör. geçici kuyruk) isteniyor mu,
-   yoksa mevcut tehdit modeli için kabul mü?
-3. Faz 2 panik tuşu varsayılanı ne olsun (ör. Ctrl+Alt+Q)? Gizlenecek pencereler = kilitli
-   uygulamalar mı, ayrı bir liste mi?
+1. **Tarayıcı/tekrar açılış muafiyeti → "oturumda bir kez doğrula" seçildi (UYGULANDI).**
+   Şifre bir kez doğru girilince resident o exe'yi `_sessionUnlocked` setine ekler; geçidi
+   açık bırakır (relock/auto-relock yapmaz). Sonraki açılışlar geçidi tetiklemez. Resident
+   logon'da yeniden başlayınca `SyncGates` geçitleri geri kurar → muafiyet sıfırlanır.
+2. **Mikro yarış penceresi → kabul edildi.** Ek karmaşıklık (kuyruk vb.) eklenmeyecek;
+   mevcut tehdit modeli için yeterli.
+3. **Faz 2 panik tuşu → şimdilik ertelendi.** Önce Faz 1 test/sağlamlaştırma. Karar
+   verildiğinde §10 yol haritası uygulanır.
 
 ## 10. FAZ 2 yol haritası — DontPanic benzeri panik-gizle
 

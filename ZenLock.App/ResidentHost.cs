@@ -26,6 +26,11 @@ public sealed class ResidentHost
     private CancellationTokenSource _cts = new();
     private Application? _app;
 
+    // Şifresi bir kez doğrulanan exe'ler bu oturum boyunca tekrar sormaz
+    // ("oturumda bir kez" muafiyeti). Resident yeniden başlayınca (logon) sıfırlanır.
+    private readonly HashSet<string> _sessionUnlocked = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _sessionLock = new();
+
     private ResidentHost()
     {
         var self = Environment.ProcessPath ?? throw new InvalidOperationException("Çalışma yolu alınamadı.");
@@ -163,7 +168,10 @@ public sealed class ResidentHost
                         HandleUnlock(req, writer);
                         break;
                     case "relock":
-                        _ifeo.CloseGate(req.Exe);
+                        bool keepOpen;
+                        lock (_sessionLock) keepOpen = _sessionUnlocked.Contains(req.Exe);
+                        // Oturumda bir kez: muaf exe'de geçidi açık bırak, kapatma.
+                        if (!keepOpen) _ifeo.CloseGate(req.Exe);
                         Respond(writer, true, "");
                         break;
                     default:
@@ -194,9 +202,10 @@ public sealed class ResidentHost
             return;
         }
 
-        // Şifre doğru -> geçidi aç. Gate hedefi başlatıp relock gönderecek.
+        // Şifre doğru -> bu oturum boyunca muaf tut, geçidi aç ve AÇIK BIRAK.
+        // Relock/auto-relock yapılmaz; sonraki açılışlar geçidi tetiklemez (oturumda bir kez).
+        lock (_sessionLock) _sessionUnlocked.Add(req.Exe);
         _ifeo.OpenGate(req.Exe);
-        ScheduleAutoRelock(req.Exe); // gate çökerse güvenlik ağı
         Respond(writer, true, "");
     }
 
