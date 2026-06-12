@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Text;
-using System.Windows;
 using System.Windows.Interop;
 using ZenLock.Auth;
 using ZenLock.Config;
@@ -14,11 +13,15 @@ namespace ZenLock.Panic;
 /// Global kısayol (Ctrl+Alt+Q) ile kilitli uygulamaların açık pencerelerini gizler;
 /// aynı kısayola tekrar basınca şifre sorar ve doğruysa geri gösterir (toggle).
 ///
+/// Panik aktifken bir WinEvent kancası (EVENT_OBJECT_SHOW) kurulur: hedef uygulamanın
+/// herhangi bir penceresi yeniden görünür olursa (ör. kısayola basılıp mevcut instance
+/// öne getirilince) anında tekrar gizlenir. Böylece pencere şifre girilene dek gizli kalır.
+///
 /// Resident (elevated/high IL) çalıştığı için ShowWindow, normal IL'deki hedef
 /// pencerelere uygulanabilir (yüksek→düşük IL serbest).
 ///
-/// Şifre kontrolü tuşa basıldığı an yapılır: şifre kurulu değilse hiçbir şey
-/// yapmaz (kullanıcı pencerelerini geri getiremez hâle düşmesin).
+/// Şifre kontrolü tuşa basıldığı an yapılır: şifre kurulu değilse hiçbir şey yapmaz
+/// (kullanıcı pencerelerini geri getiremez hâle düşmesin).
 /// </summary>
 internal sealed class PanicController : IDisposable
 {
@@ -27,6 +30,14 @@ internal sealed class PanicController : IDisposable
 
     private HwndSource? _source;
     private readonly List<IntPtr> _hidden = new();
+    private readonly HashSet<string> _targets = new(StringComparer.OrdinalIgnoreCase);
+
+    private volatile bool _panicActive;
+    private IntPtr _winEventHook;
+    private NativeMethods.WinEventDelegate? _winEventProc; // GC tutması için alanda saklanır
+
+    /// <summary>Panik aktifken (pencereler gizliyken) true. Pipe thread'inden okunur.</summary>
+    public bool IsPanicActive => _panicActive;
 
     /// <summary>Resident'ın WPF UI thread'inde çağrılmalı (HwndSource + dialog için).</summary>
     public void Start()
@@ -60,44 +71,31 @@ internal sealed class PanicController : IDisposable
         var cfg = ConfigStore.Load();
         if (!cfg.HasPassword) return; // şifre yoksa geri getirilemez -> hiç gizleme
 
-        if (_hidden.Count == 0)
-            HideTargets(cfg);
+        if (!_panicActive)
+            EnterPanic(cfg);
         else
             TryRestore(cfg);
     }
 
-    private void HideTargets(AppConfig cfg)
+    private void EnterPanic(AppConfig cfg)
     {
-        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        _targets.Clear();
         foreach (var a in cfg.Apps)
         {
             var n = a.ExeName;
             if (n.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) n = n[..^4];
-            if (n.Length > 0) names.Add(n);
+            if (n.Length > 0) _targets.Add(n);
         }
-        if (names.Count == 0) return;
+        if (_targets.Count == 0) return; // gizlenecek uygulama tanımlı değil
 
-        var pidName = new Dictionary<uint, string?>();
+        _panicActive = true;
+        InstallWinEventHook();
 
+        // Şu an açık olan hedef pencereleri gizle.
+        var pidCache = new Dictionary<uint, string?>();
         NativeMethods.EnumWindows((h, _) =>
         {
-            if (!NativeMethods.IsWindowVisible(h)) return true;
-
-            var sb = new StringBuilder(256);
-            if (NativeMethods.GetWindowText(h, sb, sb.Capacity) == 0) return true; // başlıksız = yardımcı pencere
-
-            NativeMethods.GetWindowThreadProcessId(h, out var pid);
-            if (!pidName.TryGetValue(pid, out var pname))
-            {
-                pname = SafeProcessName(pid);
-                pidName[pid] = pname;
-            }
-
-            if (pname != null && names.Contains(pname))
-            {
-                if (NativeMethods.ShowWindow(h, NativeMethods.SW_HIDE))
-                    _hidden.Add(h);
-            }
+            if (IsTargetWindow(h, pidCache)) HideWindow(h);
             return true;
         }, IntPtr.Zero);
     }
@@ -111,9 +109,66 @@ internal sealed class PanicController : IDisposable
         if (!PasswordHasher.Verify(dlg.EnteredPassword, cfg.PasswordHash, cfg.PasswordSalt))
             return; // yanlış şifre -> gizli kalsın
 
+        // Önce kancayı kaldır; aksi halde SW_SHOW olayları pencereleri hemen geri gizler.
+        RemoveWinEventHook();
         foreach (var h in _hidden)
             NativeMethods.ShowWindow(h, NativeMethods.SW_SHOW);
         _hidden.Clear();
+        _targets.Clear();
+        _panicActive = false;
+    }
+
+    // Panik sırasında yeniden görünen hedef pencereleri tekrar gizle.
+    private void OnWinEvent(IntPtr hook, uint evt, IntPtr hwnd,
+        int idObject, int idChild, uint thread, uint time)
+    {
+        if (!_panicActive || hwnd == IntPtr.Zero) return;
+        if (idObject != NativeMethods.OBJID_WINDOW || idChild != 0) return;
+
+        var pidCache = new Dictionary<uint, string?>();
+        if (IsTargetWindow(hwnd, pidCache)) HideWindow(hwnd);
+    }
+
+    private bool IsTargetWindow(IntPtr hwnd, Dictionary<uint, string?> pidCache)
+    {
+        if (!NativeMethods.IsWindowVisible(hwnd)) return false;
+
+        var sb = new StringBuilder(256);
+        if (NativeMethods.GetWindowText(hwnd, sb, sb.Capacity) == 0) return false; // başlıksız = yardımcı pencere
+
+        NativeMethods.GetWindowThreadProcessId(hwnd, out var pid);
+        if (!pidCache.TryGetValue(pid, out var pname))
+        {
+            pname = SafeProcessName(pid);
+            pidCache[pid] = pname;
+        }
+        return pname != null && _targets.Contains(pname);
+    }
+
+    private void HideWindow(IntPtr hwnd)
+    {
+        if (NativeMethods.ShowWindow(hwnd, NativeMethods.SW_HIDE) && !_hidden.Contains(hwnd))
+            _hidden.Add(hwnd);
+    }
+
+    private void InstallWinEventHook()
+    {
+        if (_winEventHook != IntPtr.Zero) return;
+        _winEventProc = OnWinEvent;
+        _winEventHook = NativeMethods.SetWinEventHook(
+            NativeMethods.EVENT_OBJECT_SHOW, NativeMethods.EVENT_OBJECT_SHOW,
+            IntPtr.Zero, _winEventProc, 0, 0,
+            NativeMethods.WINEVENT_OUTOFCONTEXT | NativeMethods.WINEVENT_SKIPOWNPROCESS);
+    }
+
+    private void RemoveWinEventHook()
+    {
+        if (_winEventHook != IntPtr.Zero)
+        {
+            NativeMethods.UnhookWinEvent(_winEventHook);
+            _winEventHook = IntPtr.Zero;
+        }
+        _winEventProc = null;
     }
 
     private static string? SafeProcessName(uint pid)
@@ -124,6 +179,7 @@ internal sealed class PanicController : IDisposable
 
     public void Dispose()
     {
+        RemoveWinEventHook();
         if (_source != null)
         {
             NativeMethods.UnregisterHotKey(_source.Handle, HotkeyId);

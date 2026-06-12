@@ -92,6 +92,10 @@ ZenLock.App/
 Satır bazlı JSON, `PipeProtocol.PipeName` (kullanıcı SID'ine özel).
 
 ```
+Gate → Resident:  { "Op": "check",  "Exe": "zen.exe" }      // şifre sormadan ÖNCE panik sorgusu
+Resident → Gate:  { "Ok": false, "Reason": "panic" }        // panik aktif → gate sessizce çıkar, başlatmaz
+                  { "Ok": true,  "Reason": "" }              // panik değil → normal akışa devam
+
 Gate → Resident:  { "Op": "unlock", "Exe": "zen.exe", "Password": "..." }
 Resident → Gate:  { "Ok": true,  "Reason": "" }            // şifre doğru, geçit açıldı
                   { "Ok": false, "Reason": "badpass" }      // yanlış şifre
@@ -165,6 +169,10 @@ hedef = **kilitli uygulamalar** (`cfg.Apps`), geri getirme = **aynı kısayol (t
       görünür + başlıklı + kilitli-exe pid'i eşleşen pencereler `ShowWindow(SW_HIDE)`; HWND'ler `_hidden`'da.
 - [x] Geri getirme: aynı kısayol → mevcut `PasswordDialog` → doğruysa `SW_SHOW`. Yanlış/iptal → gizli kalır.
 - [x] Şifre kontrolü tuşa basıldığı an (lockout önler): şifre yoksa hiç gizlemez.
+- [x] Panik aktifken yeniden görünen hedef pencereler `SetWinEventHook(EVENT_OBJECT_SHOW)`
+      ile yakalanıp tekrar gizlenir (mevcut instance kısayolla öne getirilse bile gizli kalır).
+- [x] Panik aktifken kilitli uygulamanın YENİ başlatılması: gate, şifre sormadan önce `check`
+      op'u ile panik durumunu sorar; aktifse sessizce çıkar (ifşa/şifre prompt'u yok).
 
 > Henüz YOK (gerekirse ileride): yapılandırılabilir hotkey, ayrı panik hedef listesi,
 > Settings panik sekmesi, sistem sesi mute. `AppConfig.PanicEnabled` şu an kullanılmıyor

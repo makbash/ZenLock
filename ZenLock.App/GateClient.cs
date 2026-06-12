@@ -37,6 +37,13 @@ public static class GateClient
     {
         var exeName = Path.GetFileName(targetPath);
 
+        // Panik aktifse: kilitli uygulamayı başlatma, şifre de sorma -> sessizce çık.
+        // (Resident'a ulaşılamazsa pre == null; o durumda normal akışa düşülür ve
+        //  şifre denemesinde "servis çalışmıyor" uyarısı verilir.)
+        var pre = Send(new UnlockRequest { Op = "check", Exe = exeName });
+        if (pre != null && pre.Reason == "panic")
+            return 0;
+
         for (int attempt = 1; attempt <= MaxAttempts; attempt++)
         {
             var dlg = new Auth.PasswordDialog(exeName, attempt > 1);

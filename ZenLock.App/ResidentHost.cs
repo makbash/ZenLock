@@ -166,6 +166,12 @@ public sealed class ResidentHost
 
                 switch (req.Op)
                 {
+                    case "check":
+                        // Gate, şifre sormadan önce panik durumunu sorar.
+                        // Panik aktifse hedef başlatılmaz (sessizce engellenir).
+                        var panic = _panic?.IsPanicActive ?? false;
+                        Respond(writer, !panic, panic ? "panic" : "");
+                        break;
                     case "unlock":
                         HandleUnlock(req, writer);
                         break;

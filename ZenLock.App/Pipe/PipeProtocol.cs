@@ -45,7 +45,7 @@ public static class PipeProtocol
 /// <summary>Gate -> Resident istek.</summary>
 public sealed class UnlockRequest
 {
-    /// <summary>"unlock" | "relock"</summary>
+    /// <summary>"check" | "unlock" | "relock"</summary>
     public string Op { get; set; } = "unlock";
 
     /// <summary>İlgili exe adı (leaf), ör. "zen.exe".</summary>
@@ -61,6 +61,6 @@ public sealed class UnlockResponse
     /// <summary>İşlem başarılı mı (şifre doğru / geçit açıldı vb.).</summary>
     public bool Ok { get; set; }
 
-    /// <summary>"badpass" | "nopassword" | "error" | "" (başarı).</summary>
+    /// <summary>"badpass" | "nopassword" | "panic" | "error" | "" (başarı).</summary>
     public string Reason { get; set; } = "";
 }
