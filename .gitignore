@@ -1,0 +1,16 @@
+## .NET build output
+bin/
+obj/
+
+## Publish output
+publish/
+*.user
+
+## Visual Studio / Rider
+.vs/
+.idea/
+*.suo
+
+## OS
+Thumbs.db
+.DS_Store

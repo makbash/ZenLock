@@ -1,0 +1,59 @@
+<Window x:Class="ZenLock.Ui.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ZenLock — Ayarlar" Height="460" Width="520"
+        WindowStartupLocation="CenterScreen" ResizeMode="CanMinimize">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Şifre bölümü -->
+        <GroupBox Grid.Row="0" Header="Master Şifre" Padding="10" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock x:Name="PwStatus" FontSize="12" Foreground="#666"
+                           Text="Şifre durumu" Margin="0,0,0,8"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" VerticalAlignment="Center"
+                               Text="Şifreyi belirle / değiştir"/>
+                    <Button Grid.Column="1" Content="Şifre Belirle" Width="120" Height="28"
+                            Click="SetPassword_Click"/>
+                </Grid>
+            </StackPanel>
+        </GroupBox>
+
+        <!-- Kilitli uygulamalar listesi -->
+        <GroupBox Grid.Row="1" Header="Kilitli Uygulamalar" Padding="10">
+            <ListView x:Name="AppList">
+                <ListView.View>
+                    <GridView>
+                        <GridViewColumn Header="Uygulama" Width="160"
+                                        DisplayMemberBinding="{Binding DisplayName}"/>
+                        <GridViewColumn Header="Exe" Width="100"
+                                        DisplayMemberBinding="{Binding ExeName}"/>
+                        <GridViewColumn Header="Yol" Width="200"
+                                        DisplayMemberBinding="{Binding FullPath}"/>
+                    </GridView>
+                </ListView.View>
+            </ListView>
+        </GroupBox>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,12,0,0">
+            <Button Content="Uygulama Ekle..." Width="130" Height="30" Margin="0,0,8,0"
+                    Click="AddApp_Click"/>
+            <Button Content="Seçiliyi Kaldır" Width="120" Height="30"
+                    Click="RemoveApp_Click"/>
+        </StackPanel>
+
+        <TextBlock Grid.Row="3" FontSize="11" Foreground="#888" TextWrapping="Wrap"
+                   Margin="0,12,0,0"
+                   Text="Not: Kilit yalnızca şifre belirlendikten sonra etkinleşir. Yönetici hakları gerektirir."/>
+    </Grid>
+</Window>

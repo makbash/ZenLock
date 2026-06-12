@@ -1,0 +1,183 @@
+# ZenLock — Agent Implementation Spec
+
+> Bu dosya, ZenLock üzerinde çalışacak bir kodlama agent'ı içindir. Projeyi devralmadan
+> önce bu belgeyi baştan sona oku. Mimari kararlar, **bozulmaması gereken invariant'lar**
+> ve Faz 2 yol haritası burada. Kod yazmadan önce "Çalışma konvansiyonları" ve
+> "Açık sorular" bölümlerine uy.
+
+## 1. Amaç
+
+Seçilen Windows uygulamalarını (ör. `zen.exe`) yalnızca master şifre ile başlatılabilir
+hâle getiren tek-exe'lik bir tray uygulaması. Şifre doğru değilse uygulama **hiç açılmaz**;
+3. yanlış denemede uyarı gösterilir, iptal sessizce kapatır.
+
+Tehdit modeli: **aynı bilgisayarı kullanan meraklı kişiler**. Hedeflenmeyen: yönetici
+yetkili saldırgan, disk üzerindeki veri gizliliği (o BitLocker'ın işi).
+
+## 2. Plan değerlendirmesi
+
+### Güçlü yönler (koru)
+- **IFEO seçimi doğru.** Sürücü yazmadan, kullanıcı modunda *başlamadan önce* engelleyen
+  tek yöntem. Pencere flaş'lamaz, polling/CPU yükü yoktur. ETW/WMI alternatifleri reaktiftir
+  (process zaten başlamıştır) — bu yüzden tercih edilmedi.
+- **Tek resident süreçte birleşik mimari.** Auth, config, tray ve yaşam döngüsü Faz 2
+  (panik-gizle) tarafından yeniden kullanılacak şekilde tasarlandı.
+- **Loop-safe geçit.** Sayaç tabanlı `OpenGate`/`CloseGate` + 8 sn auto-relock güvenlik ağı.
+- **Sağlam kripto.** PBKDF2/SHA-256 600k iterasyon, salt'lı; config DPAPI (CurrentUser) ile şifreli.
+- **Fail-safe.** Resident çalışmıyorsa kilitli uygulama açılmaz (bekçi yoksa kapı kapalı).
+
+### Bilinen riskler (bug DEĞİL — bunları "düzeltmeye" çalışma, gerekirse kullanıcıya danış)
+1. **AV false-positive.** IFEO `Debugger` yazımı klasik malware persistence tekniğidir.
+   Çözüm bug fix değil, **code signing**. Agent bunu kaldırmaya/gizlemeye çalışmamalı.
+2. **Mikro yarış penceresi.** `OpenGate` ile `CloseGate` arasında Debugger değeri yokken
+   aynı exe'nin başka bir başlatması geçidi atlar. Tehdit modeli için kabul edilebilir.
+   Sıfırlamak için karmaşıklık eklemeden önce kullanıcıya sor.
+3. **argv ayrıştırması.** IFEO bizi `ZenLock.exe "<hedef tam yol>" <orijinal args>` ile
+   çağırır. `Program.Main` `argv[0]`'ı hedef yol, `argv[1..]`'i argümanlar varsayar.
+   **Varsayılan tarayıcı senaryosu** (link tıklama → `zen.exe <url>`) ve dosya
+   ilişkilendirmeleri TEST EDİLMELİ — arg yönlendirme/tırnak doğru çalışıyor mu?
+4. **Pipe ACL.** Elevated (high IL) resident'ın pipe'ına, normal IL gate bağlanır.
+   Aynı kullanıcı olduğu için varsayılan DACL yeterli olmalı; sorun çıkarsa açık
+   `PipeSecurity` (AuthenticatedUserSid, ReadWrite) eklenecek. Şu an EKLENMEDİ.
+5. **Self-protection yok.** Yönetici görevi durdurup anahtarı silebilir. Tasarım gereği
+   kapsam dışı. Gold-plating yapma.
+
+## 3. Mimari
+
+Tek exe, üç mod (`Program.Main` ayrıştırır):
+
+| Mod | Tetikleyici | IL | Sorumluluk |
+|-----|-------------|----|-----|
+| **Resident** | argümansız (logon'da Task Scheduler) | Elevated | Tray, IFEO senkron, pipe sunucu, geçit aç/kapat |
+| **Gate** | `argv[0]` = kilitli exe (Windows IFEO debugger çağrısı) | Kullanıcı | Şifre sor, resident'a doğrulat, hedefi başlat |
+| **Uninstall** | `--uninstall` | Elevated | Tüm IFEO geçitlerini temizle |
+
+### IFEO loop çözümü (kritik invariant)
+`HKLM\...\Image File Execution Options\<exe>\Debugger` = `ZenLock.exe` yolu.
+Debugger değeri varken hedefi başlatmak **yine bizi tetikler** (sonsuz döngü). Çözüm:
+1. Gate şifreyi resident'a yollar (`unlock`).
+2. Resident şifreyi doğrular, **`OpenGate`** ile Debugger değerini geçici siler, `ok:true` döner.
+3. Gate hedefi başlatır (artık Debugger yok → loop yok), `relock` yollar.
+4. Resident **`CloseGate`** ile Debugger değerini geri yazar.
+5. Gate çökerse 8 sn sonra `ForceClose` geçidi geri kapatır.
+
+> **Asla:** Gate, Debugger değeri varken hedef exe'yi `Process.Start` etmemeli (loop).
+> Başlatma sadece resident geçidi açtığını onayladıktan sonra yapılır.
+
+## 4. Bileşen haritası
+
+```
+ZenLock.App/
+├── Program.cs            Mod tespiti (gate / resident / uninstall)
+├── ResidentHost.cs       Tray, pipe sunucu, IFEO senkron, auto-relock, singleton mutex
+├── GateClient.cs         Debugger modu: şifre dialog + başlat + relock
+├── Auth/
+│   ├── PasswordHasher.cs  PBKDF2 + salt, sabit zamanlı Verify
+│   └── PasswordDialog.*   Kilit açma penceresi (3 deneme, iptal sessiz)
+├── Config/
+│   ├── AppConfig.cs       PasswordHash/Salt + Apps[]
+│   └── ConfigStore.cs     %APPDATA%\ZenLock\config.dat — JSON + DPAPI, atomik yazım
+├── Ifeo/IfeoManager.cs    Install/Uninstall/Open/Close/ForceClose (sayaç tabanlı)
+├── Pipe/PipeProtocol.cs   PipeName (SID'e özel) + UnlockRequest/UnlockResponse
+├── Ui/
+│   ├── SettingsWindow.*    Uygulama ekle/çıkar, şifre belirle
+│   └── SetPasswordDialog.* Şifre belirle/değiştir (min 4, eşleşme kontrolü)
+├── Interop/NativeMethods.cs  FAZ 2 P/Invoke (hotkey, ShowWindow, EnumWindows) — hazır
+└── Panic/PanicController.cs  FAZ 2 yer tutucu
+```
+
+## 5. Pipe protokolü (sözleşme — değiştirirken iki tarafı da güncelle)
+
+Satır bazlı JSON, `PipeProtocol.PipeName` (kullanıcı SID'ine özel).
+
+```
+Gate → Resident:  { "Op": "unlock", "Exe": "zen.exe", "Password": "..." }
+Resident → Gate:  { "Ok": true,  "Reason": "" }            // şifre doğru, geçit açıldı
+                  { "Ok": false, "Reason": "badpass" }      // yanlış şifre
+                  { "Ok": false, "Reason": "nopassword" }   // şifre kurulu değil → yine de aç
+
+Gate → Resident:  { "Op": "relock", "Exe": "zen.exe" }
+Resident → Gate:  { "Ok": true,  "Reason": "" }
+```
+
+## 6. Derleme / kurulum / test
+
+```bat
+:: Derleme
+dotnet build -c Release
+
+:: Tek dosya yayın
+dotnet publish ZenLock.App -c Release -r win-x64 --self-contained false ^
+  -p:PublishSingleFile=true -o C:\Tools\ZenLock
+
+:: Elevated autostart (UAC sormadan)
+schtasks /Create /TN "ZenLock" /SC ONLOGON /RL HIGHEST /TR "C:\Tools\ZenLock\ZenLock.exe" /F
+
+:: Kaldırma
+schtasks /Delete /TN "ZenLock" /F
+"C:\Tools\ZenLock\ZenLock.exe" --uninstall
+```
+
+> Derleme ortamı **Windows** olmalı (WPF). `net8.0-windows`, .NET 8 SDK.
+
+## 7. Çalışma konvansiyonları (Mustafa'nın çalışma tarzı — uy)
+
+- **Önce plan, sonra kod.** Karar gerektiren noktada kod yazmadan önce planı paylaş ve onay al.
+- **Karar vermeden sor.** Belirsizlikte varsayım yapıp ilerleme; "Açık sorular"a bak.
+- **Fazlı geliştirme.** İş Faz 1/2/3 olarak ilerler, net TODO listeleriyle.
+- **Gereksiz log yok**, özellikle döngülerde; debug logları testten sonra temizle.
+- **Aşırı mühendislik yok.** Çalışan çözüm > ideal çözüm; karmaşıklığı (ör. self-protection)
+  gerçekten gerekene kadar erteleme.
+- Kod tanımlayıcıları İngilizce, yorum/UI metinleri Türkçe (mevcut stil korunsun).
+
+## 8. Regresyona sokma (invariant'lar)
+
+- [ ] Gate, geçit açık olduğu onayı gelmeden hedef exe'yi başlatmaz (loop koruması).
+- [ ] Şifre düz metin olarak hiçbir yere yazılmaz; sadece PBKDF2 hash + salt saklanır.
+- [ ] Config her zaman DPAPI (CurrentUser) ile şifreli yazılır.
+- [ ] Şifre kurulu DEĞİLKEN geçit kurulmaz (kullanıcı kendini kilitlemesin).
+- [ ] Resident'a ulaşılamıyorsa gate uygulamayı AÇMAZ (fail-safe) — sadece uyarır.
+- [ ] HKLM yazan tüm yollar yalnızca resident (elevated) süreçten çağrılır.
+- [ ] WinForms tipleri yalnızca `WinForms.*` alias'ı ile kullanılır (Application/MessageBox belirsizliği).
+- [ ] Auto-relock güvenlik ağı (`ForceClose`) korunur; gate çökmesinde geçit açık kalmaz.
+
+## 9. Açık sorular (kod yazmadan önce kullanıcıya sor)
+
+1. Varsayılan tarayıcı senaryosunda her link tıklamasında şifre sormak isteniyor mu, yoksa
+   "oturum boyunca bir kez doğrula" gibi bir muafiyet mi gerekir?
+2. Mikro yarış penceresini kapatmak için ek karmaşıklık (ör. geçici kuyruk) isteniyor mu,
+   yoksa mevcut tehdit modeli için kabul mü?
+3. Faz 2 panik tuşu varsayılanı ne olsun (ör. Ctrl+Alt+Q)? Gizlenecek pencereler = kilitli
+   uygulamalar mı, ayrı bir liste mi?
+
+## 10. FAZ 2 yol haritası — DontPanic benzeri panik-gizle
+
+Altyapı hazır (`Interop/NativeMethods.cs`, `Panic/PanicController.cs`). Yapılacaklar:
+
+- [ ] ResidentHost başlangıcında gizli mesaj penceresi + `RegisterHotKey` ile global panik tuşu.
+- [ ] WM_HOTKEY yakalama (HwndSource/WndProc). Tetiklenince:
+  - [ ] Kilitli uygulamaların PID'lerinden `EnumWindows` + `GetWindowThreadProcessId` ile
+        görünür pencereleri bul.
+  - [ ] `ShowWindow(SW_HIDE)` ile gizle; gizlenen HWND'leri listede tut.
+  - [ ] (opsiyonel) sistem sesini mute et.
+- [ ] Geri getirme: ikinci kısayol veya tray → **mevcut `PasswordDialog`** → doğruysa
+      `ShowWindow(SW_SHOW)` ile geri göster.
+- [ ] Config'e `PanicHotkey` ve `PanicTargets` alanları (AppConfig zaten `PanicEnabled` taşıyor).
+- [ ] Settings UI'ye panik sekmesi (hotkey seçimi, hedef listesi).
+
+> Şifre/config/tray sıfırdan yazılmayacak — sadece hotkey + HWND yönetimi eklenir.
+
+## 11. Kabul kriterleri / test senaryoları
+
+GUI olduğu için manuel doğrulama (agent otomatik koşamaz, kullanıcıdan teyit iste):
+
+1. **Temel kilit:** Şifre kurulu + `zen.exe` listede → `zen.exe` çalıştır → herhangi bir
+   pencere açılmadan şifre diyaloğu gelir.
+2. **Doğru şifre:** → Zen normal açılır (elevated DEĞİL, kullanıcı IL'sinde).
+3. **Yanlış şifre x3:** → "Şifre hatalı" uyarısı, uygulama açılmaz.
+4. **İptal:** → Sessizce kapanır, uygulama açılmaz.
+5. **Eşzamanlı 2 başlatma:** → İkisi de ayrı şifre sorar, sayaç doğru çalışır, ikisi de açılır.
+6. **Resident kapalı:** → "Kilit servisi çalışmıyor" uyarısı, uygulama açılmaz, loop yok.
+7. **Listeden çıkarma:** → `UninstallGate` çağrılır, exe artık serbest açılır.
+8. **`--uninstall`:** → Tüm IFEO anahtarları temizlenir.
+9. **AV kontrolü:** İmzasız exe'de antivirüs uyarısı çıkıyor mu? (imzalama gereği teyidi)
