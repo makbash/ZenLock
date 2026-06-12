@@ -6,6 +6,13 @@ obj/
 publish/
 *.user
 
+## Installer output
+installer/Output/
+
+## Certs / signing artifacts
+*.pfx
+*.cer
+
 ## Visual Studio / Rider
 .vs/
 .idea/
