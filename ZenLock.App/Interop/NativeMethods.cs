@@ -68,4 +68,23 @@ internal static partial class NativeMethods
     internal const uint WINEVENT_OUTOFCONTEXT = 0x0000;
     internal const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
     internal const int OBJID_WINDOW = 0;
+
+    // ---- Boşta (idle) tespiti: yeniden kilitleme için ----
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct LASTINPUTINFO
+    {
+        public uint cbSize;
+        public uint dwTime;
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
+
+    // ---- Ses sustur (panik cilası): VK_VOLUME_MUTE toggle ----
+    [DllImport("user32.dll")]
+    internal static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+
+    internal const byte VK_VOLUME_MUTE = 0xAD;
+    internal const uint KEYEVENTF_KEYUP = 0x0002;
 }

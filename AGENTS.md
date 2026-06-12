@@ -45,13 +45,15 @@ yetkili saldırgan, disk üzerindeki veri gizliliği (o BitLocker'ın işi).
 
 ## 3. Mimari
 
-Tek exe, üç mod (`Program.Main` ayrıştırır):
+Tek exe, beş mod (`Program.Main` ayrıştırır):
 
 | Mod | Tetikleyici | IL | Sorumluluk |
 |-----|-------------|----|-----|
-| **Resident** | argümansız (logon'da Task Scheduler) | Elevated | Tray, IFEO senkron, pipe sunucu, geçit aç/kapat |
+| **Resident** | argümansız (logon'da Task Scheduler) | Elevated | Tray, IFEO senkron, pipe sunucu, geçit aç/kapat, panik, yeniden kilit |
 | **Gate** | `argv[0]` = kilitli exe (Windows IFEO debugger çağrısı) | Kullanıcı | Şifre sor, resident'a doğrulat, hedefi başlat |
 | **Uninstall** | `--uninstall` | Elevated | Tüm IFEO geçitlerini temizle |
+| **Settings** | `--settings` | Kullanıcı | Pipe `settings` op'u ile resident'a Ayarlar'ı açtır (tray gizliyken erişim) |
+| **Reset** | `--reset` | Elevated | Şifre kurtarma: geçitleri kaldır + şifreyi sil (uygulama listesi korunur) |
 
 ### IFEO loop çözümü (kritik invariant)
 `HKLM\...\Image File Execution Options\<exe>\Debugger` = `ZenLock.exe` yolu.
@@ -188,8 +190,24 @@ hedef = **kilitli uygulamalar** (`cfg.Apps`), geri getirme = **aynı kısayol (t
       Settings'te "ZenLock'tan Çık" butonu (çıkış tray'e bağlı kalmasın). Masaüstünde
       "ZenLock Ayarlar" kısayolu (`--settings`) kurulur.
 
-> Henüz YOK (gerekirse ileride): ayrı panik hedef listesi, sistem sesi mute.
+- [x] **Panik sesi sustur** (best-effort). EnterPanic'te `VK_VOLUME_MUTE` toggle, restore'da
+      geri açılır (`PanicController.ToggleMute`). Ses zaten kapalıysa açılabilir — kabul edilir cila.
+
+> Henüz YOK (gerekirse ileride): ayrı panik hedef listesi.
 > Panik, şifre kuruluyken her zaman aktif (ayrı aç/kapa bayrağı yok).
+
+### Yeniden kilitleme (session-exempt sıfırlama)
+"Oturumda bir kez" muafiyeti (`ResidentHost._sessionUnlocked`) iki tetikleyiciyle sıfırlanır
+ve `SyncGates` ile geçitler geri kurulur (`ResidentHost.Relock`):
+- **Oturum kilidi** (Win+L / logoff / console disconnect) — `SystemEvents.SessionSwitch`.
+- **Boşta süre** — `AppConfig.IdleRelockMinutes` (varsayılan 5, 0 = kapalı). Dakikada bir
+  `GetLastInputInfo` ile boşta süre ölçülür. Settings'te ayarlanır.
+> Not: Yeniden kilit yalnızca gelecekteki BAŞLATMALARI etkiler; o an açık pencereler kapanmaz.
+
+### Şifre kurtarma (`--reset`)
+Şifre unutulduğunda `ZenLock.exe --reset` (YÖNETİCİ olarak): tüm geçitleri kaldırır,
+`PasswordHash/Salt`'ı siler (uygulama listesi korunur). Yönetici şartı, admin olmayan meraklı
+kişinin şifreyi sıfırlayıp kilidi by-pass etmesini engeller (`ResidentHost.ResetPassword`).
 
 ### Faz 2 invariant'ları
 - [ ] Panik geri getirme her zaman `PasswordDialog` + `PasswordHasher.Verify`'dan geçer.

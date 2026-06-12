@@ -23,6 +23,11 @@ public sealed class AppConfig
     /// kısayol (Ctrl+Alt+Shift+S) ile erişilir.</summary>
     public bool HideTrayIcon { get; set; } = false;
 
+    /// <summary>Bu kadar dakika boşta kalınca "oturumda bir kez" muafiyeti sıfırlanır ve
+    /// geçitler geri kurulur. 0 = boşta yeniden kilitleme kapalı. Oturum kilidi (Win+L)
+    /// her durumda yeniden kilitler.</summary>
+    public int IdleRelockMinutes { get; set; } = 5;
+
     public bool HasPassword => !string.IsNullOrEmpty(PasswordHash) && !string.IsNullOrEmpty(PasswordSalt);
 }
 

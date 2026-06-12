@@ -36,6 +36,7 @@ internal sealed class PanicController : IDisposable
     private readonly HashSet<string> _targets = new(StringComparer.OrdinalIgnoreCase);
 
     private volatile bool _panicActive;
+    private bool _mutedByUs;
     private IntPtr _winEventHook;
     private NativeMethods.WinEventDelegate? _winEventProc; // GC tutması için alanda saklanır
 
@@ -123,6 +124,10 @@ internal sealed class PanicController : IDisposable
             if (IsTargetWindow(h, pidCache)) HideWindow(h);
             return true;
         }, IntPtr.Zero);
+
+        // Cila: sistemi sustur (best-effort; ses zaten kapalıysa açılabilir).
+        ToggleMute();
+        _mutedByUs = true;
     }
 
     private void TryRestore(AppConfig cfg)
@@ -141,6 +146,14 @@ internal sealed class PanicController : IDisposable
         _hidden.Clear();
         _targets.Clear();
         _panicActive = false;
+
+        if (_mutedByUs) { ToggleMute(); _mutedByUs = false; } // sesi geri aç
+    }
+
+    private static void ToggleMute()
+    {
+        NativeMethods.keybd_event(NativeMethods.VK_VOLUME_MUTE, 0, 0, UIntPtr.Zero);
+        NativeMethods.keybd_event(NativeMethods.VK_VOLUME_MUTE, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
     }
 
     // Panik sırasında yeniden görünen hedef pencereleri tekrar gizle.

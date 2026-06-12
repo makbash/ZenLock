@@ -54,8 +54,16 @@
                 <StackPanel>
                     <CheckBox x:Name="HideTrayCheck" Content="Tray ikonunu gizle"
                               Click="HideTray_Click"/>
-                    <TextBlock FontSize="11" Foreground="#888" TextWrapping="Wrap" Margin="22,4,0,0"
+                    <TextBlock FontSize="11" Foreground="#888" TextWrapping="Wrap" Margin="22,4,0,8"
                                Text="Gizliyken Ayarlar'a Ctrl+Alt+Shift+S kısayolu ya da 'ZenLock.exe --settings' ile erişilir."/>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock VerticalAlignment="Center"
+                                   Text="Boşta kalınca yeniden kilitle (dk, 0 = kapalı):"/>
+                        <TextBox x:Name="IdleBox" Width="50" Height="24" Margin="8,0,0,0"
+                                 VerticalContentAlignment="Center" LostFocus="IdleBox_LostFocus"/>
+                    </StackPanel>
+                    <TextBlock FontSize="11" Foreground="#888" TextWrapping="Wrap" Margin="0,4,0,0"
+                               Text="Ekran kilitlenince (Win+L) muafiyet her durumda sıfırlanır."/>
                 </StackPanel>
             </GroupBox>
         </StackPanel>

@@ -41,6 +41,7 @@ public partial class SettingsWindow : Window
             : "Şifre ayarlanmadı. Kilit pasif (önce şifre belirleyin).";
         HotkeyBox.Text = FormatHotkey(_cfg.PanicModifiers, _cfg.PanicVk);
         HideTrayCheck.IsChecked = _cfg.HideTrayIcon;
+        IdleBox.Text = _cfg.IdleRelockMinutes.ToString();
         AppList.ItemsSource = null;
         AppList.ItemsSource = _cfg.Apps;
     }
@@ -50,6 +51,15 @@ public partial class SettingsWindow : Window
         _cfg.HideTrayIcon = HideTrayCheck.IsChecked == true;
         ConfigStore.Save(_cfg);
         _onTrayChanged?.Invoke();
+    }
+
+    private void IdleBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (!int.TryParse(IdleBox.Text, out var minutes) || minutes < 0)
+            minutes = 0;
+        _cfg.IdleRelockMinutes = minutes;
+        ConfigStore.Save(_cfg);
+        IdleBox.Text = minutes.ToString(); // normalize edilmiş değeri geri yaz
     }
 
     private void Exit_Click(object sender, RoutedEventArgs e)

@@ -22,6 +22,10 @@ internal static class Program
         if (argv.Length == 1 && string.Equals(argv[0], "--settings", StringComparison.OrdinalIgnoreCase))
             return GateClient.SignalOpenSettings();
 
+        // --reset: şifre unutulduğunda kurtarma. Geçitleri kaldırır + şifreyi siler (yönetici gerekir).
+        if (argv.Length == 1 && string.Equals(argv[0], "--reset", StringComparison.OrdinalIgnoreCase))
+            return ResidentHost.ResetPassword();
+
         // Gate modu tespiti: ilk argüman var olan bir dosya ve kilitli listede ise
         if (argv.Length >= 1 && IsGatedInvocation(argv[0]))
             return GateClient.Run(targetPath: argv[0], targetArgs: argv[1..]);

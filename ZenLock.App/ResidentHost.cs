@@ -1,12 +1,16 @@
 using System.Drawing;
 using System.IO;
 using System.IO.Pipes;
+using System.Runtime.InteropServices;
+using System.Security.Principal;
 using System.Text.Json;
 using System.Windows;
+using Microsoft.Win32;
 using WinForms = System.Windows.Forms;
 using ZenLock.Auth;
 using ZenLock.Config;
 using ZenLock.Ifeo;
+using ZenLock.Interop;
 using ZenLock.Panic;
 using ZenLock.Pipe;
 using ZenLock.Ui;
@@ -27,6 +31,7 @@ public sealed class ResidentHost
     private CancellationTokenSource _cts = new();
     private Application? _app;
     private PanicController? _panic;
+    private Timer? _idleTimer;
 
     // Şifresi bir kez doğrulanan exe'ler bu oturum boyunca tekrar sormaz
     // ("oturumda bir kez" muafiyeti). Resident yeniden başlayınca (logon) sıfırlanır.
@@ -63,6 +68,39 @@ public sealed class ResidentHost
         catch { return 1; }
     }
 
+    /// <summary>"--reset": şifre unutulduğunda kurtarma. Tüm geçitleri kaldırır ve
+    /// şifreyi siler (uygulama listesi korunur). Yönetici hakları gerekir — meraklı
+    /// kişi (admin değil) bunu yapamaz, böylece kilit by-pass edilemez.</summary>
+    public static int ResetPassword()
+    {
+        var elevated = new WindowsPrincipal(WindowsIdentity.GetCurrent())
+            .IsInRole(WindowsBuiltInRole.Administrator);
+        if (!elevated)
+        {
+            MessageBox.Show(
+                "Şifre sıfırlama yönetici hakları gerektirir.\n" +
+                "Lütfen ZenLock'u yönetici olarak çalıştırın: ZenLock.exe --reset",
+                "ZenLock", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return 1;
+        }
+
+        try
+        {
+            var ifeo = new IfeoManager(Environment.ProcessPath!);
+            var cfg = ConfigStore.Load();
+            foreach (var app in cfg.Apps) ifeo.UninstallGate(app.ExeName);
+            cfg.PasswordHash = null;
+            cfg.PasswordSalt = null;
+            ConfigStore.Save(cfg);
+            MessageBox.Show(
+                "Şifre sıfırlandı ve kilitler kaldırıldı. Uygulama listesi korundu.\n" +
+                "ZenLock'u açıp yeni bir master şifre belirleyebilirsiniz.",
+                "ZenLock", MessageBoxButton.OK, MessageBoxImage.Information);
+            return 0;
+        }
+        catch { return 1; }
+    }
+
     private int Start()
     {
         _app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
@@ -72,11 +110,15 @@ public sealed class ResidentHost
             SetupTray();
             _panic = new PanicController();
             _panic.Start(onOpenSettings: OpenSettings); // panik kısayolu + gizli ayar kısayolu
+            SystemEvents.SessionSwitch += OnSessionSwitch; // Win+L / logoff → yeniden kilitle
+            _idleTimer = new Timer(_ => CheckIdle(), null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
             _ = Task.Run(() => PipeServerLoop(_cts.Token));
         };
         _app.Exit += (_, _) =>
         {
             _cts.Cancel();
+            SystemEvents.SessionSwitch -= OnSessionSwitch;
+            _idleTimer?.Dispose();
             _panic?.Dispose();
             _tray?.Dispose();
         };
@@ -93,6 +135,39 @@ public sealed class ResidentHost
         {
             try { _ifeo.InstallGate(app.ExeName); } catch { /* yetki yoksa sessiz geç */ }
         }
+    }
+
+    /// <summary>"Oturumda bir kez" muafiyetini sıfırla ve geçitleri geri kur.
+    /// Oturum kilidi (Win+L) veya boşta kalma tetikler.</summary>
+    private void Relock()
+    {
+        lock (_sessionLock)
+        {
+            if (_sessionUnlocked.Count == 0) return; // zaten kilitli
+            _sessionUnlocked.Clear();
+        }
+        SyncGates(); // muafiyetle silinen Debugger değerlerini geri yaz
+    }
+
+    private void OnSessionSwitch(object? sender, SessionSwitchEventArgs e)
+    {
+        if (e.Reason is SessionSwitchReason.SessionLock
+            or SessionSwitchReason.SessionLogoff
+            or SessionSwitchReason.ConsoleDisconnect)
+            Relock();
+    }
+
+    private void CheckIdle()
+    {
+        var minutes = ConfigStore.Load().IdleRelockMinutes;
+        if (minutes <= 0) return;
+
+        var lii = new NativeMethods.LASTINPUTINFO { cbSize = (uint)Marshal.SizeOf<NativeMethods.LASTINPUTINFO>() };
+        if (!NativeMethods.GetLastInputInfo(ref lii)) return;
+
+        var idleMs = (uint)Environment.TickCount - lii.dwTime;
+        if (idleMs >= (uint)minutes * 60u * 1000u)
+            Relock();
     }
 
     private void SetupTray()
