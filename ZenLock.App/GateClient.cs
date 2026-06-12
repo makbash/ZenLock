@@ -114,6 +114,22 @@ public static class GateClient
         }
     }
 
+    /// <summary>`--settings`: resident'a Ayarlar'ı açma sinyali yollar (tray gizliyken erişim).</summary>
+    public static int SignalOpenSettings()
+    {
+        var resp = Send(new UnlockRequest { Op = "settings" });
+        if (resp == null)
+        {
+            // Bu mod kendi başına WPF Application başlatmaz; MessageBox tek başına çalışır.
+            MessageBox.Show(
+                "ZenLock kilit servisi çalışmıyor gibi görünüyor.\n\n" +
+                "Lütfen ZenLock'u (yönetici olarak) başlatın ve tekrar deneyin.",
+                "ZenLock", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return 1;
+        }
+        return 0;
+    }
+
     private static UnlockResponse? SendUnlock(string exe, string password)
         => Send(new UnlockRequest { Op = "unlock", Exe = exe, Password = password });
 

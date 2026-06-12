@@ -25,7 +25,11 @@ namespace ZenLock.Panic;
 /// </summary>
 internal sealed class PanicController : IDisposable
 {
-    private const int HotkeyId = 1;
+    private const int HotkeyId = 1;        // panik (yapılandırılabilir)
+    private const int SettingsHotkeyId = 2; // gizli ayar kısayolu (sabit: Ctrl+Alt+Shift+S)
+    private const uint VkS = 0x53;          // 'S'
+
+    private Action? _onOpenSettings;
 
     private HwndSource? _source;
     private readonly List<IntPtr> _hidden = new();
@@ -39,8 +43,10 @@ internal sealed class PanicController : IDisposable
     public bool IsPanicActive => _panicActive;
 
     /// <summary>Resident'ın WPF UI thread'inde çağrılmalı (HwndSource + dialog için).</summary>
-    public void Start()
+    public void Start(Action? onOpenSettings = null)
     {
+        _onOpenSettings = onOpenSettings;
+
         var parameters = new HwndSourceParameters("ZenLockPanicWindow")
         {
             Width = 0,
@@ -51,6 +57,9 @@ internal sealed class PanicController : IDisposable
         _source.AddHook(WndProc);
 
         RegisterFromConfig();
+        // Gizli ayar kısayolu (tray gizliyken Ayarlar'a erişim): Ctrl+Alt+Shift+S
+        NativeMethods.RegisterHotKey(_source.Handle, SettingsHotkeyId,
+            NativeMethods.MOD_CONTROL | NativeMethods.MOD_ALT | NativeMethods.MOD_SHIFT, VkS);
     }
 
     /// <summary>Kısayolu config'ten (yeniden) kaydeder. UI thread'de çağrılmalı.</summary>
@@ -73,10 +82,11 @@ internal sealed class PanicController : IDisposable
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == NativeMethods.WM_HOTKEY && wParam.ToInt32() == HotkeyId)
+        if (msg == NativeMethods.WM_HOTKEY)
         {
-            Toggle();
-            handled = true;
+            var id = wParam.ToInt32();
+            if (id == HotkeyId) { Toggle(); handled = true; }
+            else if (id == SettingsHotkeyId) { _onOpenSettings?.Invoke(); handled = true; }
         }
         return IntPtr.Zero;
     }
@@ -198,6 +208,7 @@ internal sealed class PanicController : IDisposable
         if (_source != null)
         {
             NativeMethods.UnregisterHotKey(_source.Handle, HotkeyId);
+            NativeMethods.UnregisterHotKey(_source.Handle, SettingsHotkeyId);
             _source.RemoveHook(WndProc);
             _source.Dispose();
             _source = null;

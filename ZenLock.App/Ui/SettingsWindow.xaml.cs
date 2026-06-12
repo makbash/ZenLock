@@ -18,13 +18,18 @@ public partial class SettingsWindow : Window
 
     private readonly IfeoManager _ifeo;
     private readonly Action? _onHotkeyChanged;
+    private readonly Action? _onTrayChanged;
+    private readonly Action? _onExit;
     private AppConfig _cfg;
 
-    public SettingsWindow(IfeoManager ifeo, Action? onHotkeyChanged = null)
+    public SettingsWindow(IfeoManager ifeo, Action? onHotkeyChanged = null,
+        Action? onTrayChanged = null, Action? onExit = null)
     {
         InitializeComponent();
         _ifeo = ifeo;
         _onHotkeyChanged = onHotkeyChanged;
+        _onTrayChanged = onTrayChanged;
+        _onExit = onExit;
         _cfg = ConfigStore.Load();
         RefreshUi();
     }
@@ -35,8 +40,22 @@ public partial class SettingsWindow : Window
             ? "Şifre ayarlandı. Kilit etkin."
             : "Şifre ayarlanmadı. Kilit pasif (önce şifre belirleyin).";
         HotkeyBox.Text = FormatHotkey(_cfg.PanicModifiers, _cfg.PanicVk);
+        HideTrayCheck.IsChecked = _cfg.HideTrayIcon;
         AppList.ItemsSource = null;
         AppList.ItemsSource = _cfg.Apps;
+    }
+
+    private void HideTray_Click(object sender, RoutedEventArgs e)
+    {
+        _cfg.HideTrayIcon = HideTrayCheck.IsChecked == true;
+        ConfigStore.Save(_cfg);
+        _onTrayChanged?.Invoke();
+    }
+
+    private void Exit_Click(object sender, RoutedEventArgs e)
+    {
+        Close();
+        _onExit?.Invoke();
     }
 
     private void HotkeyBox_PreviewKeyDown(object sender, KeyEventArgs e)

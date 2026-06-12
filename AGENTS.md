@@ -103,6 +103,9 @@ Resident → Gate:  { "Ok": true,  "Reason": "" }            // şifre doğru, g
 
 Gate → Resident:  { "Op": "relock", "Exe": "zen.exe" }
 Resident → Gate:  { "Ok": true,  "Reason": "" }
+
+Client → Resident: { "Op": "settings" }                     // `--settings`: Ayarlar'ı açtır (tray gizliyken)
+Resident → Client: { "Ok": true,  "Reason": "" }            // resident UI thread'de OpenSettings (şifre kapısı)
 ```
 
 ## 6. Derleme / kurulum / test
@@ -179,6 +182,11 @@ hedef = **kilitli uygulamalar** (`cfg.Apps`), geri getirme = **aynı kısayol (t
 - [x] **Tray güvenliği.** Tray → "Ayarlar" ve "Çıkış", şifre kuruluysa `PasswordDialog` ile
       doğrulama ister (`ResidentHost.VerifyPassword`). Meraklı kişi resident'ı kapatıp/ayarları
       açıp kilidi devre dışı bırakamaz. Şifre yoksa serbest (kullanıcı önce şifre kurabilsin).
+- [x] **Tray ikonu gizleme.** `AppConfig.HideTrayIcon` + Settings'te onay kutusu. Gizliyken
+      Ayarlar'a iki yolla erişilir: (a) gizli kısayol **Ctrl+Alt+Shift+S** (PanicController id=2),
+      (b) **`ZenLock.exe --settings`** → pipe `settings` op'u → resident OpenSettings (şifre kapısı).
+      Settings'te "ZenLock'tan Çık" butonu (çıkış tray'e bağlı kalmasın). Masaüstünde
+      "ZenLock Ayarlar" kısayolu (`--settings`) kurulur.
 
 > Henüz YOK (gerekirse ileride): ayrı panik hedef listesi, sistem sesi mute.
 > Panik, şifre kuruluyken her zaman aktif (ayrı aç/kapa bayrağı yok).

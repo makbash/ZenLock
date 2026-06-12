@@ -48,6 +48,16 @@
                     </Grid>
                 </StackPanel>
             </GroupBox>
+
+            <!-- Genel -->
+            <GroupBox Header="Genel" Padding="10" Margin="0,0,0,12">
+                <StackPanel>
+                    <CheckBox x:Name="HideTrayCheck" Content="Tray ikonunu gizle"
+                              Click="HideTray_Click"/>
+                    <TextBlock FontSize="11" Foreground="#888" TextWrapping="Wrap" Margin="22,4,0,0"
+                               Text="Gizliyken Ayarlar'a Ctrl+Alt+Shift+S kısayolu ya da 'ZenLock.exe --settings' ile erişilir."/>
+                </StackPanel>
+            </GroupBox>
         </StackPanel>
 
         <!-- Kilitli uygulamalar listesi -->
@@ -66,12 +76,20 @@
             </ListView>
         </GroupBox>
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,12,0,0">
-            <Button Content="Uygulama Ekle..." Width="130" Height="30" Margin="0,0,8,0"
-                    Click="AddApp_Click"/>
-            <Button Content="Seçiliyi Kaldır" Width="120" Height="30"
-                    Click="RemoveApp_Click"/>
-        </StackPanel>
+        <Grid Grid.Row="2" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <Button Content="Uygulama Ekle..." Width="130" Height="30" Margin="0,0,8,0"
+                        Click="AddApp_Click"/>
+                <Button Content="Seçiliyi Kaldır" Width="120" Height="30"
+                        Click="RemoveApp_Click"/>
+            </StackPanel>
+            <Button Grid.Column="1" Content="ZenLock'tan Çık" Width="120" Height="30"
+                    Click="Exit_Click"/>
+        </Grid>
 
         <TextBlock Grid.Row="3" FontSize="11" Foreground="#888" TextWrapping="Wrap"
                    Margin="0,12,0,0"

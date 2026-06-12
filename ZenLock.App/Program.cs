@@ -18,6 +18,10 @@ internal static class Program
         if (argv.Length == 1 && string.Equals(argv[0], "--uninstall", StringComparison.OrdinalIgnoreCase))
             return ResidentHost.Uninstall();
 
+        // --settings: çalışan resident'a Ayarlar'ı açması için sinyal gönder (tray gizliyken erişim)
+        if (argv.Length == 1 && string.Equals(argv[0], "--settings", StringComparison.OrdinalIgnoreCase))
+            return GateClient.SignalOpenSettings();
+
         // Gate modu tespiti: ilk argüman var olan bir dosya ve kilitli listede ise
         if (argv.Length >= 1 && IsGatedInvocation(argv[0]))
             return GateClient.Run(targetPath: argv[0], targetArgs: argv[1..]);

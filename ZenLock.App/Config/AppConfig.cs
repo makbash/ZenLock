@@ -19,6 +19,10 @@ public sealed class AppConfig
     /// <summary>Panik kısayolu sanal tuş kodu (VK). Varsayılan 'Q' = 0x51.</summary>
     public uint PanicVk { get; set; } = 0x51;
 
+    /// <summary>Tray ikonu gizlensin mi? Gizliyken Ayarlar'a `--settings` veya gizli
+    /// kısayol (Ctrl+Alt+Shift+S) ile erişilir.</summary>
+    public bool HideTrayIcon { get; set; } = false;
+
     public bool HasPassword => !string.IsNullOrEmpty(PasswordHash) && !string.IsNullOrEmpty(PasswordSalt);
 }
 

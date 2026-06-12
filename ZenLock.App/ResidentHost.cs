@@ -71,7 +71,7 @@ public sealed class ResidentHost
             SyncGates();
             SetupTray();
             _panic = new PanicController();
-            _panic.Start(); // global panik kısayolu (Ctrl+Alt+Q)
+            _panic.Start(onOpenSettings: OpenSettings); // panik kısayolu + gizli ayar kısayolu
             _ = Task.Run(() => PipeServerLoop(_cts.Token));
         };
         _app.Exit += (_, _) =>
@@ -106,10 +106,16 @@ public sealed class ResidentHost
         {
             Icon = SystemIcons.Shield,
             Text = "ZenLock",
-            Visible = true,
+            Visible = !ConfigStore.Load().HideTrayIcon,
             ContextMenuStrip = menu
         };
         _tray.DoubleClick += (_, _) => OpenSettings();
+    }
+
+    /// <summary>Config'teki HideTrayIcon'a göre tray ikonunu göster/gizle. UI thread'de çağrılır.</summary>
+    private void RefreshTray()
+    {
+        if (_tray != null) _tray.Visible = !ConfigStore.Load().HideTrayIcon;
     }
 
     private void OpenSettings()
@@ -118,7 +124,11 @@ public sealed class ResidentHost
         _app?.Dispatcher.Invoke(() =>
         {
             if (!VerifyPassword("Ayarlar")) return;
-            var win = new SettingsWindow(_ifeo, () => _panic?.ReloadHotkey());
+            var win = new SettingsWindow(
+                _ifeo,
+                onHotkeyChanged: () => _panic?.ReloadHotkey(),
+                onTrayChanged: RefreshTray,
+                onExit: () => _app?.Shutdown());
             win.ShowDialog();
         });
     }
@@ -196,6 +206,11 @@ public sealed class ResidentHost
                         // Panik aktifse hedef başlatılmaz (sessizce engellenir).
                         var panic = _panic?.IsPanicActive ?? false;
                         Respond(writer, !panic, panic ? "panic" : "");
+                        break;
+                    case "settings":
+                        // --settings sinyali: Ayarlar'ı UI thread'de aç (pipe handler'ı bloklamadan).
+                        Respond(writer, true, "");
+                        _app?.Dispatcher.BeginInvoke(new Action(OpenSettings));
                         break;
                     case "unlock":
                         HandleUnlock(req, writer);

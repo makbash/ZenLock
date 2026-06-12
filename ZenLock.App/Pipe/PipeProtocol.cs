@@ -45,7 +45,7 @@ public static class PipeProtocol
 /// <summary>Gate -> Resident istek.</summary>
 public sealed class UnlockRequest
 {
-    /// <summary>"check" | "unlock" | "relock"</summary>
+    /// <summary>"check" | "unlock" | "relock" | "settings"</summary>
     public string Op { get; set; } = "unlock";
 
     /// <summary>İlgili exe adı (leaf), ör. "zen.exe".</summary>
