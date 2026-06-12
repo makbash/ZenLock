@@ -181,7 +181,7 @@ hedef = **kilitli uygulamalar** (`cfg.Apps`), geri getirme = **aynı kısayol (t
       açıp kilidi devre dışı bırakamaz. Şifre yoksa serbest (kullanıcı önce şifre kurabilsin).
 
 > Henüz YOK (gerekirse ileride): ayrı panik hedef listesi, sistem sesi mute.
-> `AppConfig.PanicEnabled` şu an kullanılmıyor (panik, şifre kuruluyken her zaman aktif).
+> Panik, şifre kuruluyken her zaman aktif (ayrı aç/kapa bayrağı yok).
 
 ### Faz 2 invariant'ları
 - [ ] Panik geri getirme her zaman `PasswordDialog` + `PasswordHasher.Verify`'dan geçer.

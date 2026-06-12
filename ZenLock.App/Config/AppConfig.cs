@@ -12,9 +12,6 @@ public sealed class AppConfig
     /// <summary>Kilitlenecek uygulamalar.</summary>
     public List<GatedApp> Apps { get; set; } = new();
 
-    /// <summary>FAZ 2 — panik tuşu ile gizlenecek uygulamalar (şimdilik kullanılmıyor).</summary>
-    public bool PanicEnabled { get; set; } = false;
-
     /// <summary>Panik kısayolu modifier bitmask'i (Win32 MOD_*: Alt=1, Ctrl=2, Shift=4, Win=8).
     /// Varsayılan Ctrl+Alt = 3.</summary>
     public uint PanicModifiers { get; set; } = 3;
