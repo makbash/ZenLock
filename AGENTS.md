@@ -155,22 +155,25 @@ schtasks /Delete /TN "ZenLock" /F
 3. **Faz 2 panik tuşu → şimdilik ertelendi.** Önce Faz 1 test/sağlamlaştırma. Karar
    verildiğinde §10 yol haritası uygulanır.
 
-## 10. FAZ 2 yol haritası — DontPanic benzeri panik-gizle
+## 10. FAZ 2 — DontPanic benzeri panik-gizle (UYGULANDI 2026-06-12)
 
-Altyapı hazır (`Interop/NativeMethods.cs`, `Panic/PanicController.cs`). Yapılacaklar:
+`Panic/PanicController.cs` tamamlandı. Kararlar (§9.3): kısayol **Ctrl+Alt+Q sabit**,
+hedef = **kilitli uygulamalar** (`cfg.Apps`), geri getirme = **aynı kısayol (toggle)**.
 
-- [ ] ResidentHost başlangıcında gizli mesaj penceresi + `RegisterHotKey` ile global panik tuşu.
-- [ ] WM_HOTKEY yakalama (HwndSource/WndProc). Tetiklenince:
-  - [ ] Kilitli uygulamaların PID'lerinden `EnumWindows` + `GetWindowThreadProcessId` ile
-        görünür pencereleri bul.
-  - [ ] `ShowWindow(SW_HIDE)` ile gizle; gizlenen HWND'leri listede tut.
-  - [ ] (opsiyonel) sistem sesini mute et.
-- [ ] Geri getirme: ikinci kısayol veya tray → **mevcut `PasswordDialog`** → doğruysa
-      `ShowWindow(SW_SHOW)` ile geri göster.
-- [ ] Config'e `PanicHotkey` ve `PanicTargets` alanları (AppConfig zaten `PanicEnabled` taşıyor).
-- [ ] Settings UI'ye panik sekmesi (hotkey seçimi, hedef listesi).
+- [x] ResidentHost başlangıcında gizli message-only `HwndSource` + `RegisterHotKey` (Ctrl+Alt+Q).
+- [x] WM_HOTKEY → `WndProc` → toggle. Gizleme: `EnumWindows` + `GetWindowThreadProcessId`,
+      görünür + başlıklı + kilitli-exe pid'i eşleşen pencereler `ShowWindow(SW_HIDE)`; HWND'ler `_hidden`'da.
+- [x] Geri getirme: aynı kısayol → mevcut `PasswordDialog` → doğruysa `SW_SHOW`. Yanlış/iptal → gizli kalır.
+- [x] Şifre kontrolü tuşa basıldığı an (lockout önler): şifre yoksa hiç gizlemez.
 
-> Şifre/config/tray sıfırdan yazılmayacak — sadece hotkey + HWND yönetimi eklenir.
+> Henüz YOK (gerekirse ileride): yapılandırılabilir hotkey, ayrı panik hedef listesi,
+> Settings panik sekmesi, sistem sesi mute. `AppConfig.PanicEnabled` şu an kullanılmıyor
+> (panik, şifre kuruluyken her zaman aktif).
+
+### Faz 2 invariant'ları
+- [ ] Panik geri getirme her zaman `PasswordDialog` + `PasswordHasher.Verify`'dan geçer.
+- [ ] Şifre kurulu değilken panik gizleme YAPILMAZ (kullanıcı pencerelerine erişimini kaybetmesin).
+- [ ] `ShowWindow` yalnızca `_hidden`'da kayıtlı HWND'lere uygulanır (rastgele pencere gösterilmez).
 
 ## 11. Kabul kriterleri / test senaryoları
 

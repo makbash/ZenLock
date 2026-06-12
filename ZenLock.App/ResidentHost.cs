@@ -7,6 +7,7 @@ using WinForms = System.Windows.Forms;
 using ZenLock.Auth;
 using ZenLock.Config;
 using ZenLock.Ifeo;
+using ZenLock.Panic;
 using ZenLock.Pipe;
 using ZenLock.Ui;
 
@@ -25,6 +26,7 @@ public sealed class ResidentHost
     private WinForms.NotifyIcon? _tray;
     private CancellationTokenSource _cts = new();
     private Application? _app;
+    private PanicController? _panic;
 
     // Şifresi bir kez doğrulanan exe'ler bu oturum boyunca tekrar sormaz
     // ("oturumda bir kez" muafiyeti). Resident yeniden başlayınca (logon) sıfırlanır.
@@ -68,11 +70,14 @@ public sealed class ResidentHost
         {
             SyncGates();
             SetupTray();
+            _panic = new PanicController();
+            _panic.Start(); // global panik kısayolu (Ctrl+Alt+Q)
             _ = Task.Run(() => PipeServerLoop(_cts.Token));
         };
         _app.Exit += (_, _) =>
         {
             _cts.Cancel();
+            _panic?.Dispose();
             _tray?.Dispose();
         };
         _app.Run();
