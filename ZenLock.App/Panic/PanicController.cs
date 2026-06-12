@@ -26,7 +26,6 @@ namespace ZenLock.Panic;
 internal sealed class PanicController : IDisposable
 {
     private const int HotkeyId = 1;
-    private const uint VkQ = 0x51; // 'Q'
 
     private HwndSource? _source;
     private readonly List<IntPtr> _hidden = new();
@@ -51,9 +50,25 @@ internal sealed class PanicController : IDisposable
         _source = new HwndSource(parameters);
         _source.AddHook(WndProc);
 
-        NativeMethods.RegisterHotKey(
-            _source.Handle, HotkeyId,
-            NativeMethods.MOD_CONTROL | NativeMethods.MOD_ALT, VkQ);
+        RegisterFromConfig();
+    }
+
+    /// <summary>Kısayolu config'ten (yeniden) kaydeder. UI thread'de çağrılmalı.</summary>
+    public void ReloadHotkey()
+    {
+        if (_source == null) return;
+        NativeMethods.UnregisterHotKey(_source.Handle, HotkeyId);
+        RegisterFromConfig();
+    }
+
+    private void RegisterFromConfig()
+    {
+        if (_source == null) return;
+        var cfg = ConfigStore.Load();
+        var mods = cfg.PanicModifiers != 0 ? cfg.PanicModifiers
+            : NativeMethods.MOD_CONTROL | NativeMethods.MOD_ALT;
+        var vk = cfg.PanicVk != 0 ? cfg.PanicVk : 0x51u;
+        NativeMethods.RegisterHotKey(_source.Handle, HotkeyId, mods, vk);
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)

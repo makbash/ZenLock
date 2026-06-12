@@ -15,6 +15,13 @@ public sealed class AppConfig
     /// <summary>FAZ 2 — panik tuşu ile gizlenecek uygulamalar (şimdilik kullanılmıyor).</summary>
     public bool PanicEnabled { get; set; } = false;
 
+    /// <summary>Panik kısayolu modifier bitmask'i (Win32 MOD_*: Alt=1, Ctrl=2, Shift=4, Win=8).
+    /// Varsayılan Ctrl+Alt = 3.</summary>
+    public uint PanicModifiers { get; set; } = 3;
+
+    /// <summary>Panik kısayolu sanal tuş kodu (VK). Varsayılan 'Q' = 0x51.</summary>
+    public uint PanicVk { get; set; } = 0x51;
+
     public bool HasPassword => !string.IsNullOrEmpty(PasswordHash) && !string.IsNullOrEmpty(PasswordSalt);
 }
 

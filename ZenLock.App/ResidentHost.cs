@@ -100,7 +100,7 @@ public sealed class ResidentHost
         var menu = new WinForms.ContextMenuStrip();
         menu.Items.Add("Ayarlar...", null, (_, _) => OpenSettings());
         menu.Items.Add(new WinForms.ToolStripSeparator());
-        menu.Items.Add("Çıkış", null, (_, _) => _app?.Shutdown());
+        menu.Items.Add("Çıkış", null, (_, _) => RequestExit());
 
         _tray = new WinForms.NotifyIcon
         {
@@ -117,9 +117,34 @@ public sealed class ResidentHost
         // WPF UI thread üzerinde aç.
         _app?.Dispatcher.Invoke(() =>
         {
-            var win = new SettingsWindow(_ifeo);
+            if (!VerifyPassword("Ayarlar")) return;
+            var win = new SettingsWindow(_ifeo, () => _panic?.ReloadHotkey());
             win.ShowDialog();
         });
+    }
+
+    private void RequestExit()
+    {
+        _app?.Dispatcher.Invoke(() =>
+        {
+            if (!VerifyPassword("Çıkış")) return;
+            _app!.Shutdown();
+        });
+    }
+
+    /// <summary>UI thread'de çağrılır. Şifre kuruluysa doğrular; kurulu değilse serbest (true).</summary>
+    private bool VerifyPassword(string label)
+    {
+        var cfg = ConfigStore.Load();
+        if (!cfg.HasPassword) return true;
+
+        var dlg = new PasswordDialog(label, retry: false) { Topmost = true };
+        if (dlg.ShowDialog() != true) return false; // iptal
+        if (PasswordHasher.Verify(dlg.EnteredPassword, cfg.PasswordHash, cfg.PasswordSalt))
+            return true;
+
+        MessageBox.Show("Şifre hatalı.", "ZenLock", MessageBoxButton.OK, MessageBoxImage.Error);
+        return false;
     }
 
     // ---- Named pipe sunucusu ----

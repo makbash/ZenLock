@@ -173,15 +173,21 @@ hedef = **kilitli uygulamalar** (`cfg.Apps`), geri getirme = **aynı kısayol (t
       ile yakalanıp tekrar gizlenir (mevcut instance kısayolla öne getirilse bile gizli kalır).
 - [x] Panik aktifken kilitli uygulamanın YENİ başlatılması: gate, şifre sormadan önce `check`
       op'u ile panik durumunu sorar; aktifse sessizce çıkar (ifşa/şifre prompt'u yok).
+- [x] **Yapılandırılabilir kısayol.** `AppConfig.PanicModifiers` (MOD_* bitmask) + `PanicVk`
+      (VK). Varsayılan Ctrl+Alt+Q. Settings'teki "Panik Tuşu" kutusu yakalar; `PanicController.ReloadHotkey()`
+      ile anında yeniden kaydedilir (SettingsWindow'a `onHotkeyChanged` callback geçilir).
+- [x] **Tray güvenliği.** Tray → "Ayarlar" ve "Çıkış", şifre kuruluysa `PasswordDialog` ile
+      doğrulama ister (`ResidentHost.VerifyPassword`). Meraklı kişi resident'ı kapatıp/ayarları
+      açıp kilidi devre dışı bırakamaz. Şifre yoksa serbest (kullanıcı önce şifre kurabilsin).
 
-> Henüz YOK (gerekirse ileride): yapılandırılabilir hotkey, ayrı panik hedef listesi,
-> Settings panik sekmesi, sistem sesi mute. `AppConfig.PanicEnabled` şu an kullanılmıyor
-> (panik, şifre kuruluyken her zaman aktif).
+> Henüz YOK (gerekirse ileride): ayrı panik hedef listesi, sistem sesi mute.
+> `AppConfig.PanicEnabled` şu an kullanılmıyor (panik, şifre kuruluyken her zaman aktif).
 
 ### Faz 2 invariant'ları
 - [ ] Panik geri getirme her zaman `PasswordDialog` + `PasswordHasher.Verify`'dan geçer.
 - [ ] Şifre kurulu değilken panik gizleme YAPILMAZ (kullanıcı pencerelerine erişimini kaybetmesin).
 - [ ] `ShowWindow` yalnızca `_hidden`'da kayıtlı HWND'lere uygulanır (rastgele pencere gösterilmez).
+- [ ] Tray "Ayarlar"/"Çıkış" şifre kuruluyken `PasswordHasher.Verify`'dan geçmeden çalışmaz.
 
 ## 11. Kabul kriterleri / test senaryoları
 

@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Input;
 using Microsoft.Win32;
 using ZenLock.Auth;
 using ZenLock.Config;
@@ -9,13 +10,21 @@ namespace ZenLock.Ui;
 
 public partial class SettingsWindow : Window
 {
+    // Win32 MOD_* bitleri
+    private const uint MOD_ALT = 0x0001;
+    private const uint MOD_CONTROL = 0x0002;
+    private const uint MOD_SHIFT = 0x0004;
+    private const uint MOD_WIN = 0x0008;
+
     private readonly IfeoManager _ifeo;
+    private readonly Action? _onHotkeyChanged;
     private AppConfig _cfg;
 
-    public SettingsWindow(IfeoManager ifeo)
+    public SettingsWindow(IfeoManager ifeo, Action? onHotkeyChanged = null)
     {
         InitializeComponent();
         _ifeo = ifeo;
+        _onHotkeyChanged = onHotkeyChanged;
         _cfg = ConfigStore.Load();
         RefreshUi();
     }
@@ -25,8 +34,53 @@ public partial class SettingsWindow : Window
         PwStatus.Text = _cfg.HasPassword
             ? "Şifre ayarlandı. Kilit etkin."
             : "Şifre ayarlanmadı. Kilit pasif (önce şifre belirleyin).";
+        HotkeyBox.Text = FormatHotkey(_cfg.PanicModifiers, _cfg.PanicVk);
         AppList.ItemsSource = null;
         AppList.ItemsSource = _cfg.Apps;
+    }
+
+    private void HotkeyBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        e.Handled = true; // Alt'ın menü zilini ve odak gezinmesini engelle
+
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt
+                or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin)
+            return; // yalnızca modifier — asıl tuşu bekle
+
+        if (Keyboard.Modifiers == ModifierKeys.None)
+        {
+            MessageBox.Show("En az bir modifier (Ctrl/Alt/Shift) ile birlikte bir tuşa basın.",
+                "ZenLock", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        uint mods = 0;
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Alt)) mods |= MOD_ALT;
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) mods |= MOD_CONTROL;
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) mods |= MOD_SHIFT;
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Windows)) mods |= MOD_WIN;
+
+        var vk = (uint)KeyInterop.VirtualKeyFromKey(key);
+
+        _cfg.PanicModifiers = mods;
+        _cfg.PanicVk = vk;
+        ConfigStore.Save(_cfg);
+        HotkeyBox.Text = FormatHotkey(mods, vk);
+
+        _onHotkeyChanged?.Invoke(); // resident hotkey'i yeniden kaydetsin
+    }
+
+    private static string FormatHotkey(uint mods, uint vk)
+    {
+        var parts = new List<string>();
+        if ((mods & MOD_CONTROL) != 0) parts.Add("Ctrl");
+        if ((mods & MOD_ALT) != 0) parts.Add("Alt");
+        if ((mods & MOD_SHIFT) != 0) parts.Add("Shift");
+        if ((mods & MOD_WIN) != 0) parts.Add("Win");
+        var key = KeyInterop.KeyFromVirtualKey((int)vk);
+        parts.Add(key.ToString());
+        return string.Join(" + ", parts);
     }
 
     private void SetPassword_Click(object sender, RoutedEventArgs e)
