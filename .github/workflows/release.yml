@@ -1,0 +1,51 @@
+name: Release
+
+# v* biçiminde bir tag push edilince (ör. v1.0.0) installer derlenir ve
+# GitHub Release'e ZenLockSetup.exe olarak eklenir.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Sürümü tag'den al
+        id: ver
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}" -replace '^v',''
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Tek dosya yayın
+        run: dotnet publish ZenLock.App -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish
+
+      - name: Inno Setup kur
+        run: choco install innosetup -y --no-progress
+
+      - name: Installer derle
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=${{ steps.ver.outputs.version }} installer\ZenLock.iss'
+
+      - name: Release oluştur + installer ekle
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ZenLock ${{ github.ref_name }}
+          files: installer/Output/ZenLockSetup.exe
+          body: |
+            ZenLock ${{ github.ref_name }}
+
+            ## İndirme
+            Aşağıdaki **ZenLockSetup.exe**'yi indirip çalıştırın (yönetici hakkı ister).
+
+            > Not: Exe imzasız olduğundan Windows SmartScreen / antivirüs uyarabilir.
+            > Bu, IFEO tekniğinin doğası gereğidir; detay için README ve docs/SIGNING.md.

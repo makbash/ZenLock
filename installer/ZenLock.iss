@@ -8,7 +8,10 @@
 ; Çıktı: installer\Output\ZenLockSetup.exe
 
 #define AppName "ZenLock"
-#define AppVersion "1.0.0"
+; Sürüm dışarıdan verilebilir: ISCC /DAppVersion=1.2.3 (CI tag'inden). Yoksa varsayılan.
+#ifndef AppVersion
+  #define AppVersion "1.0.0"
+#endif
 #define AppExe "ZenLock.exe"
 
 [Setup]

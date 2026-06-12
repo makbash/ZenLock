@@ -6,6 +6,14 @@ kısayolu** ile kilitli uygulamaların açık pencerelerini anında gizleyip şi
 
 Zen Browser örneği için yazıldı ama herhangi bir `.exe` için çalışır.
 
+## İndirme
+
+Hazır kurulum için [**Releases**](https://github.com/makbash/ZenLock/releases) sayfasından
+en güncel **`ZenLockSetup.exe`**'yi indirin ve çalıştırın (yönetici hakkı ister).
+
+> Exe imzasız olduğundan Windows SmartScreen / antivirüs uyarabilir — bu, IFEO tekniğinin
+> doğası gereğidir (bkz. [docs/SIGNING.md](docs/SIGNING.md)). "Yine de çalıştır" ile devam edin.
+
 ## Özellikler
 
 - **Başlatma kilidi** — kilitli bir exe çağrıldığında, pencere açılmadan önce şifre sorulur.
